@@ -1,81 +1,38 @@
-<div align="center">
-
 # 👻 PhantomAPI
 
-### Turn ChatGPT into a FREE OpenAI-Compatible API
+A FastAPI backend that turns the free ChatGPT web interface into a powerful **AI Search & Chat API** — no OpenAI key required.
 
-[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
-[![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=for-the-badge&logo=playwright&logoColor=white)](https://playwright.dev/)
-[![Docker](https://img.shields.io/badge/Docker-2CA5E0?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-
-**The invisible proxy that bridges ChatGPT's free web interface with your AI automation workflows.**
-
-[Quick Start](#-quick-start) · [n8n Integration](#-connecting-to-n8n) · [Architecture](#-architecture) · [Docker](#-docker-deployment)
-
-</div>
-
-<div align="center">
-  <video src="demo.mp4" width="800" controls muted autoplay loop></video>
-</div>
+Uses [Playwright](https://playwright.dev/) to drive a real Chrome browser, giving you:
+- **`/v1/chat/completions`** — OpenAI-compatible chat endpoint
+- **`/v1/responses`** — Modern Responses API endpoint
+- **`/search`** — Agentic natural-language search that browses the web and returns structured JSON
 
 ---
 
-## 🌟 What is PhantomAPI?
+## Features
 
-**PhantomAPI** is a high-performance proxy server that makes ChatGPT's free web interface behave like the official OpenAI API. It's designed as a **drop-in replacement** for any tool that speaks the OpenAI protocol — especially **n8n**.
-
-### ✨ Key Features
-
-| Feature | Description |
-|:---|:---|
-| 💸 **Zero API Costs** | Uses ChatGPT's free web interface via headless browser automation |
-| ⚡ **Async Architecture** | Built on FastAPI with a dedicated browser thread for non-blocking requests |
-| 🤖 **AI Agent Support** | Full tool-calling / function-calling support for n8n Agent nodes |
-| 🔒 **API Key Auth** | Protected with Bearer token authentication |
-| 🐳 **Docker Ready** | Deploy in seconds with `docker-compose up` |
-| 🎨 **Built-in GUI** | A sleek dark-mode chat interface for quick testing |
-| 📐 **Clean Architecture** | Proper FastAPI structure — routers, schemas, services, utils |
+- 🔍 **Human-language search** — ask anything, get back structured JSON (flights, stock prices, news, weather, …)
+- 🤖 **Agentic web browsing** — automatically searches DuckDuckGo / Google and fetches relevant pages via Playwright
+- 🔒 **API key auth** — all endpoints protected by a Bearer token
+- 🌐 **OpenAI-compatible** — drop-in replacement for `/v1/chat/completions`
+- 🖥️ **Built-in chat GUI** — served at `/gui`
 
 ---
 
-## ⚙️ How It Works
+## Quick Start
 
-```
-┌──────────┐     HTTP/JSON      ┌──────────────┐     Playwright     ┌──────────────┐
-│   n8n    │ ──────────────────▶ │  PhantomAPI  │ ──────────────────▶ │  ChatGPT     │
-│  (or any │ ◀────────────────── │  (FastAPI)   │ ◀────────────────── │  (Web UI)    │
-│  client) │   OpenAI Schema     │              │   Scrape Response   │              │
-└──────────┘                     └──────────────┘                     └──────────────┘
-```
-
-1. **You send** a standard OpenAI API request to PhantomAPI
-2. **PhantomAPI** formats your messages into a prompt and types it into ChatGPT's web interface using a stealth browser
-3. **ChatGPT responds** on the web page — PhantomAPI scrapes the text
-4. **The response** is formatted back into the official OpenAI JSON schema and returned to you
-
----
-
-## 🛠️ Quick Start
-
-### Prerequisites
-- **Python 3.10+**
-- **Google Chrome** installed on your system
-
-### 1. Clone & Install
+### 1. Install dependencies
 
 ```bash
-git clone https://github.com/mrshibly/phantom-api.git
-cd phantom-api
 pip install -r requirements.txt
-python -m playwright install chromium
+playwright install chrome
 ```
 
 ### 2. Configure
 
 ```bash
 cp .env.example .env
-# Edit .env and set your API_SECRET_KEY
+# Edit .env and set a strong API_SECRET_KEY
 ```
 
 ### 3. Run
@@ -84,123 +41,135 @@ cp .env.example .env
 python run.py
 ```
 
-The server will start on `http://localhost:7777`.
+Server starts at `http://127.0.0.1:7777`
 
-| Endpoint | Description |
-|:---|:---|
-| `http://localhost:7777/` | Health check |
-| `http://localhost:7777/docs` | Swagger UI (interactive API docs) |
-| `http://localhost:7777/gui` | Chat GUI for quick testing |
+Open the chat UI: **http://127.0.0.1:7777/gui**
 
 ---
 
-## 🔌 Connecting to n8n
+## API Reference
 
-<div align="center">
-  <img src="n8n_preview.png" width="800" alt="n8n Workflow Example">
-</div>
+All endpoints require:
+```
+Authorization: Bearer <API_SECRET_KEY>
+```
 
-### Method 1: OpenAI Node (Recommended)
+### `GET /search` — Natural Language Search
 
-1. In n8n, go to **Credentials → New → OpenAI API**
-2. Set **Base URL** to: `http://127.0.0.1:7777/v1`
-3. Set **API Key** to your `API_SECRET_KEY` from `.env`
-4. Use this credential in any **OpenAI** or **AI Agent** node
+```bash
+curl "http://localhost:7777/search?q=find+me+flights+from+Dhaka+to+JFK+today" \
+  -H "Authorization: Bearer your-secret-key"
+```
 
-> **Docker Tip:** If n8n runs in Docker, use `http://host.docker.internal:7777/v1`
+### `POST /search` — Natural Language Search (POST)
 
-### Method 2: HTTP Request Node
+```bash
+curl -X POST "http://localhost:7777/search" \
+  -H "Authorization: Bearer your-secret-key" \
+  -H "Content-Type: application/json" \
+  -d '{"q": "Find me last 6 months GP stock prices"}'
+```
 
-1. Add an **HTTP Request** node
-2. **Method:** `POST`
-3. **URL:** `http://127.0.0.1:7777/v1/chat/completions`
-4. **Authentication:** Header Auth → `Authorization: Bearer YOUR_KEY`
-5. **Body (JSON):**
-
+**Example response — flights:**
 ```json
 {
-  "model": "gpt-4o-mini",
-  "messages": [
-    { "role": "user", "content": "Hello, PhantomAPI!" }
-  ]
+  "search": {
+    "origin": "DAC",
+    "destination": "Any US Airport",
+    "departure_date": "2026-07-20"
+  },
+  "results": [
+    {
+      "airline": "Qatar Airways",
+      "flight_number": "QR639",
+      "departure": {"airport": "DAC", "time": "03:15"},
+      "arrival": {"airport": "JFK", "time": "15:30"},
+      "stops": 1,
+      "price": {"amount": 1185, "currency": "USD"}
+    }
+  ],
+  "total_results": 17
 }
 ```
 
----
-
-## 📐 Architecture
-
-```
-phantom-api/
-├── app/
-│   ├── main.py              # App factory, CORS, lifespan
-│   ├── config.py            # Environment-driven settings
-│   ├── dependencies.py      # Auth dependency injection
-│   ├── api/v1/
-│   │   ├── router.py        # Route aggregator
-│   │   ├── chat.py          # POST /v1/chat/completions
-│   │   ├── responses.py     # POST /v1/responses
-│   │   └── models.py        # GET  /v1/models
-│   ├── schemas/
-│   │   ├── chat.py          # Request/Response models
-│   │   └── responses.py     # Responses API models
-│   ├── services/
-│   │   └── browser.py       # Playwright browser engine
-│   └── utils/
-│       ├── prompt.py         # Smart prompt builder
-│       └── parser.py         # Tool-call JSON parser
-├── static/
-│   └── index.html            # Chat GUI
-├── tests/
-│   └── test_health.py        # Endpoint tests
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-├── .env.example
-└── run.py                    # Entry point
+**Example response — stock prices:**
+```json
+[
+  {"date": "2026-07-16", "open": 258.6, "high": 259.0, "low": 257.2, "close": 257.5, "volume": 118570},
+  {"date": "2026-07-15", "open": 259.0, "high": 259.0, "low": 256.6, "close": 257.5, "volume": 254210}
+]
 ```
 
----
-
-## 🐳 Docker Deployment
+### `POST /v1/chat/completions` — OpenAI-compatible chat
 
 ```bash
-# Build and run
-docker-compose up --build -d
+curl -X POST "http://localhost:7777/v1/chat/completions" \
+  -H "Authorization: Bearer your-secret-key" \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Hello!"}], "model": "gpt-4o-mini"}'
+```
 
-# The server is now running on http://localhost:7777
+### `GET /v1/models` — List models
+
+```bash
+curl "http://localhost:7777/v1/models" \
+  -H "Authorization: Bearer your-secret-key"
 ```
 
 ---
 
-## 🔧 API Reference
+## Configuration (`.env`)
 
-### `POST /v1/chat/completions`
-
-Standard OpenAI Chat Completions endpoint. Supports messages, tools, and function calling.
-
-### `POST /v1/responses`
-
-Modern Responses API for newer n8n versions. Accepts `input` (string or messages) and optional `instructions`.
-
-### `GET /v1/models`
-
-Returns available model identifiers (used by n8n's model dropdown).
-
-### `GET /`
-
-Health check — returns server status and version.
+| Variable | Default | Description |
+|---|---|---|
+| `API_SECRET_KEY` | `change-me` | Bearer token for all endpoints |
+| `HOST` | `127.0.0.1` | Server bind host |
+| `PORT` | `7777` | Server port |
+| `HEADLESS` | `true` | Run Chrome headlessly |
+| `BROWSER_TIMEOUT` | `120000` | Browser timeout in ms |
 
 ---
 
-## 📄 License
+## Project Structure
 
-This project is open-sourced under the [MIT License](LICENSE).
+```
+PhantomAPI/
+├── app/
+│   ├── api/v1/
+│   │   ├── chat.py        # POST /v1/chat/completions
+│   │   ├── responses.py   # POST /v1/responses
+│   │   ├── models.py      # GET /v1/models
+│   │   └── search.py      # GET+POST /search & /v1/search
+│   ├── services/
+│   │   ├── browser.py     # Playwright engine (chat + web search + fetch)
+│   │   ├── chat.py        # Chat service logic
+│   │   └── search.py      # Agentic search loop
+│   ├── schemas/           # Pydantic request/response models
+│   ├── utils/             # Prompt builder, parser
+│   ├── config.py
+│   ├── dependencies.py
+│   └── main.py
+├── static/
+│   └── index.html         # Chat GUI
+├── tests/
+├── run.py                 # Entry point
+└── requirements.txt
+```
 
 ---
 
-<div align="center">
+## How the Search Works
 
-**Built with ❤️ by [mrshibly](https://github.com/mrshibly)**
+1. User sends a natural-language query (e.g. *"find flights from Dhaka to US today"*)
+2. ChatGPT (via Playwright) decides what to search
+3. PhantomAPI searches DuckDuckGo → picks best URLs → fetches pages with Playwright
+4. Page content is fed back to ChatGPT
+5. ChatGPT returns a clean, structured JSON answer
 
-</div>
+Up to **6 reasoning iterations** are performed automatically.
+
+---
+
+## License
+
+MIT
