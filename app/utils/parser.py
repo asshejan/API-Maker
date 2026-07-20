@@ -7,9 +7,10 @@ responses, converting them into OpenAI-compatible function call objects.
 import json
 import re
 import uuid
+from typing import Union
 
 
-def parse_tool_calls(response_text: str) -> list[dict] | None:
+def parse_tool_calls(response_text: str) -> Union[list[dict], None]:
     """Attempt to extract tool_calls JSON from the response text.
 
     Returns a list of OpenAI-compatible tool-call dicts, or None if

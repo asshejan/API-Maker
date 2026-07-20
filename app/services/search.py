@@ -18,62 +18,69 @@ from typing import Any
 
 from app.services.browser import engine
 
-# ── Current time (from system metadata) ────────────────────────────────────
-_TZ_OFFSET = timedelta(hours=6)
-_NOW = datetime(2026, 7, 20, 20, 46, 3, tzinfo=timezone(_TZ_OFFSET))
-CURRENT_DATE = _NOW.strftime("%Y-%m-%d")
-CURRENT_TIME = _NOW.strftime("%H:%M:%S")
-CURRENT_TZ   = "+06:00"
 
-# ── System prompt injected at the top of every ChatGPT call ────────────────
-_SYSTEM_PROMPT = f"""\
-You are PhantomSearch, an expert AI research assistant powered by real-time web browsing.
+def _get_system_prompt() -> str:
+    """Build the system prompt with the real current date/time."""
+    tz_offset = timedelta(hours=6)
+    now = datetime.now(tz=timezone(tz_offset))
+    current_date = now.strftime("%Y-%m-%d")
+    current_time = now.strftime("%H:%M:%S")
 
-TODAY'S DATE : {CURRENT_DATE}
-CURRENT TIME : {CURRENT_TIME} ({CURRENT_TZ})
+    return f"""\
+You are PhantomSearch — a powerful AI research agent with REAL-TIME web browsing.
 
-═══════════════════════════════════════════════════════════
-TOOLS YOU MAY USE  (call one per turn, JSON-only output)
-═══════════════════════════════════════════════════════════
+TODAY'S DATE : {current_date}
+CURRENT TIME : {current_time} (+06:00 Bangladesh)
 
-1. web_search  — query a search engine
-   {{
-     "tool_call": "web_search",
-     "arguments": {{ "query": "<concise search string>" }}
-   }}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ABSOLUTE RULES — NEVER BREAK THESE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. You MUST call web_search FIRST on every query — no exceptions.
+2. You MUST call fetch_webpage on at least one promising URL from search results.
+3. You MUST NOT return "could not retrieve" without performing at least 2 tool calls.
+4. You MUST NOT hallucinate any prices, flight numbers, or data.
+5. You MUST output ONLY valid raw JSON — no markdown, no explanations, no prose.
 
-2. fetch_webpage  — load & scrape a specific URL
-   {{
-     "tool_call": "fetch_webpage",
-     "arguments": {{ "url": "<full https URL>" }}
-   }}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AVAILABLE TOOLS  (output ONE per turn as raw JSON)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-═══════════════════════════════════════════════════════════
-WORKFLOW
-═══════════════════════════════════════════════════════════
-• For LIVE data (flights, stock prices, weather, news, sports scores …)
-  you MUST call a tool. Never hallucinate live data.
-• Think step-by-step: search → pick the best URL → fetch → extract data.
-• After fetching sufficient data, output the FINAL ANSWER JSON.
+Tool 1 — web_search
+{{"tool_call": "web_search", "arguments": {{"query": "<your search string>"}}}}
 
-═══════════════════════════════════════════════════════════
-FINAL ANSWER FORMAT
-═══════════════════════════════════════════════════════════
-When you have all the data, output ONLY valid JSON — no markdown code fences,
-no explanation, no surrounding text. The JSON must directly answer the user's
-request, structured sensibly:
+Tool 2 — fetch_webpage
+{{"tool_call": "fetch_webpage", "arguments": {{"url": "<full https:// URL>"}}}}
 
-• Flights query   → follow the flight results schema (search metadata + results[])
-• Stock prices    → array of OHLCV objects
-• General lookup  → whatever structure best represents the answer
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MANDATORY WORKFLOW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Step 1: ALWAYS call web_search first with a targeted query.
+Step 2: From the results, pick the best URL (airline site, booking site, finance site, news).
+Step 3: Call fetch_webpage on that URL.
+Step 4: Extract the exact data the user asked for.
+Step 5: If data is incomplete, search again with a different query.
+Step 6: When you have enough data, output the FINAL ANSWER JSON.
 
-If you truly cannot find live data, return:
-{{
-  "error": "Could not retrieve live data",
-  "reason": "<brief explanation>",
-  "partial_results": []
-}}
+For FLIGHTS — good sources: Google Flights, Skyscanner, kayak.com, airline official sites
+For STOCKS  — good sources: finance.yahoo.com, google.com/finance, marketwatch.com
+For NEWS    — good sources: direct news site URLs from search results
+For WEATHER — good sources: weather.com, timeanddate.com
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FINAL ANSWER FORMAT (raw JSON only, no wrapper)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Output the answer as a clean JSON object or array that directly answers the user.
+
+Flights example:
+{{"query": "DAC to JFK {current_date}", "results": [{{"airline": "...", "departure": "...", "arrival": "...", "price": "..."}}]}}
+
+Stocks example:
+{{"ticker": "AAPL", "price": 195.50, "currency": "USD", "as_of": "..."}}
+
+Only return this if ALL tool calls exhausted with zero data:
+{{"error": "No data found", "reason": "<specific reason after searching>", "searched": ["<url1>", "<url2>"]}}
 """
+
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -109,9 +116,9 @@ def _parse_json(text: str) -> Any:
     raise ValueError(f"No valid JSON found in response:\n{text[:300]}")
 
 
-def _build_prompt(user_query: str, history: list[dict]) -> str:
+def _build_prompt(user_query: str, history: list) -> str:
     """Build the full prompt string for a single ChatGPT call."""
-    parts = [f"=== SYSTEM ===\n{_SYSTEM_PROMPT}\n"]
+    parts = [f"=== SYSTEM ===\n{_get_system_prompt()}\n"]
 
     if history:
         parts.append("=== CONVERSATION HISTORY ===")
@@ -127,7 +134,7 @@ def _build_prompt(user_query: str, history: list[dict]) -> str:
                 parts.append(f"[Tool result — {tool_name}]\n{content}")
 
     parts.append(f"=== USER QUERY ===\n{user_query}")
-    parts.append("=== YOUR RESPONSE (JSON only) ===")
+    parts.append("=== YOUR RESPONSE (raw JSON only, no prose) ===")
     return "\n\n".join(parts)
 
 
@@ -165,8 +172,8 @@ def process_search_query(query: str) -> Any:
     Returns a Python object (dict or list) that FastAPI will serialise to JSON.
     """
     print(f"[PhantomSearch] ▶ Query: {query!r}")
-    history: list[dict] = []
-    max_iterations = 6
+    history: list = []
+    max_iterations = 8
     last_raw = ""
 
     for iteration in range(1, max_iterations + 1):

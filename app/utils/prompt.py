@@ -4,10 +4,10 @@ Converts OpenAI-style messages (with optional tool definitions)
 into a single flat prompt string suitable for the ChatGPT web UI.
 """
 
-from typing import Any
+from typing import Any, Union
 
 
-def format_prompt(messages: list[dict[str, Any]], tools: list | None = None) -> str:
+def format_prompt(messages: list[dict[str, Any]], tools: Union[list, None] = None) -> str:
     """Build a single prompt string from a list of OpenAI-format messages.
 
     When *tools* are provided and no tool results are present in the

@@ -9,6 +9,7 @@ Also exposes search_web() and fetch_url() for the agentic search feature.
 import asyncio
 import threading
 import urllib.parse
+from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 from app.config import settings
@@ -54,7 +55,6 @@ class BrowserEngine(threading.Thread):
         self.playwright = await async_playwright().start()
         self.browser = await self.playwright.chromium.launch(
             headless=settings.HEADLESS,
-            channel="chrome",
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
@@ -76,6 +76,23 @@ class BrowserEngine(threading.Thread):
         return await self.browser.new_context(
             user_agent=self._STEALTH_UA,
             viewport={"width": viewport_w, "height": viewport_h},
+        )
+
+    async def _chat_context(self):
+        """Create a browser context with the saved ChatGPT session (if available)."""
+        state_path = settings.CHATGPT_STORAGE_STATE
+        if state_path and Path(state_path).exists():
+            print(f"[PhantomAPI] 🔑 Loading session from {state_path}")
+            return await self.browser.new_context(
+                user_agent=self._STEALTH_UA,
+                viewport={"width": 1920, "height": 1080},
+                storage_state=state_path,
+            )
+        print("[PhantomAPI] ⚠ No session file found — ChatGPT may prompt for login.")
+        print("[PhantomAPI]   Run: python scripts/save_session.py  to create one.")
+        return await self.browser.new_context(
+            user_agent=self._STEALTH_UA,
+            viewport={"width": 1920, "height": 1080},
         )
 
     # ------------------------------------------------------------------
@@ -127,10 +144,7 @@ class BrowserEngine(threading.Thread):
 
     async def _interact(self, prompt: str) -> str:
         """Open a new ChatGPT session, send the prompt, and scrape the reply."""
-        context = await self.browser.new_context(
-            user_agent=self._STEALTH_UA,
-            viewport={"width": 1920, "height": 1080},
-        )
+        context = await self._chat_context()
 
         # Hide the webdriver flag so ChatGPT thinks we're a real user
         await context.add_init_script(
@@ -144,12 +158,37 @@ class BrowserEngine(threading.Thread):
 
             # Navigate to ChatGPT
             await page.goto("https://chatgpt.com/", wait_until="domcontentloaded")
+            await asyncio.sleep(2)  # let JS settle
+
+            # Try multiple known selectors for the prompt textarea
+            textarea_selectors = [
+                "#prompt-textarea",
+                "textarea[placeholder]",
+                "div[contenteditable='true']",
+                "[data-testid='prompt-textarea']",
+            ]
+            textarea = None
+            for sel in textarea_selectors:
+                try:
+                    await page.wait_for_selector(sel, timeout=10000)
+                    textarea = sel
+                    break
+                except Exception:
+                    continue
+
+            if not textarea:
+                # Capture current URL to help diagnose login wall
+                current_url = page.url
+                raise RuntimeError(
+                    f"Could not find ChatGPT prompt textarea (current URL: {current_url}). "
+                    "This usually means the session is not logged in. "
+                    "Run: python scripts/save_session.py"
+                )
 
             # Type the prompt
-            await page.wait_for_selector("#prompt-textarea", timeout=60000)
-            await page.fill("#prompt-textarea", prompt)
+            await page.fill(textarea, prompt)
             await asyncio.sleep(0.5)
-            await page.press("#prompt-textarea", "Enter")
+            await page.press(textarea, "Enter")
 
             # Wait for the assistant to start responding
             await page.wait_for_selector(

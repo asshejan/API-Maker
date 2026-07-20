@@ -7,8 +7,13 @@ from app.config import settings
 async def verify_api_key(request: Request) -> str:
     """Validate the Bearer token from the Authorization header.
 
-    Returns the validated key on success, raises 401 on failure.
+    Authentication is BYPASSED when API_SECRET_KEY is empty or set to "none".
+    Any other value (including the default placeholder) enforces auth.
     """
+    key = settings.API_SECRET_KEY.strip()
+    if not key or key.lower() == "none":
+        return ""  # Auth disabled
+
     authorization = request.headers.get("authorization", "")
 
     if not authorization:

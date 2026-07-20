@@ -6,13 +6,14 @@ Route handlers call these functions and return the result directly.
 
 import time
 import uuid
+from typing import Union
 
 from app.services.browser import engine
 from app.utils.prompt import format_prompt
 from app.utils.parser import parse_tool_calls
 
 
-def process_chat_completion(messages: list, model: str, tools: list | None = None) -> dict:
+def process_chat_completion(messages: list, model: str, tools: Union[list, None] = None) -> dict:
     """Process a chat completion request and return an OpenAI-compatible response."""
     prompt = format_prompt(messages, tools=tools)
     start = time.time()
@@ -27,7 +28,7 @@ def process_chat_completion(messages: list, model: str, tools: list | None = Non
     return _build_chat_response(response_text, tool_calls, model, int(start), p_tokens, c_tokens)
 
 
-def process_responses_api(messages: list, model: str, tools: list | None = None) -> dict:
+def process_responses_api(messages: list, model: str, tools: Union[list, None] = None) -> dict:
     """Process a Responses API request and return the formatted response."""
     prompt = format_prompt(messages, tools=tools)
     start = time.time()
@@ -46,7 +47,7 @@ def process_responses_api(messages: list, model: str, tools: list | None = None)
 # ---------------------------------------------------------------------------
 
 def _build_chat_response(
-    text: str, tool_calls: list | None, model: str, created: int, p_tokens: int, c_tokens: int
+    text: str, tool_calls: Union[list, None], model: str, created: int, p_tokens: int, c_tokens: int
 ) -> dict:
     """Build an OpenAI-compatible chat completion response dict."""
     response_id = f"chatcmpl-{uuid.uuid4().hex[:29]}"
@@ -70,7 +71,7 @@ def _build_chat_response(
 
 
 def _build_responses_response(
-    text: str, tool_calls: list | None, model: str, created: int, p_tokens: int, c_tokens: int
+    text: str, tool_calls: Union[list, None], model: str, created: int, p_tokens: int, c_tokens: int
 ) -> dict:
     """Build a Responses API response dict."""
     response_id = f"resp-{uuid.uuid4().hex[:29]}"

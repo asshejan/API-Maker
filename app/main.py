@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from app import __version__
 from app.api.v1.router import router as v1_router
 from app.api.v1.search import router as search_router
+from app.api.simple import router as simple_router
 from app.services.browser import engine
 
 
@@ -37,6 +38,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(simple_router)
 app.include_router(v1_router)
 app.include_router(search_router)
 
